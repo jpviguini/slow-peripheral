@@ -1,4 +1,4 @@
-<h1 align="center">SLOW-peripheral 🌐</h1>
+<h1 align="center">SLOW-peripheral 🌐📦</h1>
 <p align="center">Trabalho prático para a disciplina SSC0142 - Redes de Computadores</p>
 
 <p align="center">
