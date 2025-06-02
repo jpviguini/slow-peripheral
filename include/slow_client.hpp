@@ -50,6 +50,7 @@ public:
     explicit SlowClient(const std::string& server_ip);
     ~SlowClient();
 
+    bool process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes);
     bool send_connect();
     bool receive_setup();
     bool send_data(const uint8_t* data, size_t length);
