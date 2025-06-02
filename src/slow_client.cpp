@@ -1,25 +1,4 @@
 #include "slow_client.hpp"
-#include <cstring>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <ctime>
-#include <bitset>
-#include <iostream>
-
-uint32_t encode_sttl_flags(uint32_t sttl, uint8_t flags) {
-    return ((sttl & 0x07FFFFFF) << 5) | (flags & 0x1F);
-}
-
-void gerar_nil(uint8_t* uuid) {
-    std::memset(uuid, 0, UUID_SIZE);
-}
-
-void print_uuid(const uint8_t* uuid) {
-    for (int i = 0; i < UUID_SIZE; ++i)
-        printf("%02x", uuid[i]);
-    printf("\n");
-}
 
 void print_binario(const void* data, size_t size) {
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data);
@@ -39,28 +18,6 @@ void print_binario(const void* data, size_t size) {
         if ((i + 1) % 4 == 0) std::cout << "\n";
     }
     if (size % 4 != 0) std::cout << "\n";
-}
-
-void print_flags(uint8_t flags) {
-    std::cout << std::bitset<5>(flags) << " (";
-    bool printed = false;
-
-    if (flags & FLAG_CONNECT) { std::cout << "CONNECT"; printed = true; }
-    if (flags & FLAG_REVIVE)  { if (printed) std::cout << ", "; std::cout << "REVIVE"; printed = true; }
-    if (flags & FLAG_ACK)     { if (printed) std::cout << ", "; std::cout << "ACK"; printed = true; }
-    if (flags & FLAG_ACCEPT)  { if (printed) std::cout << ", "; std::cout << "ACCEPT"; printed = true; }
-    if (flags & FLAG_MB)      { if (printed) std::cout << ", "; std::cout << "MB"; printed = true; }
-    std::cout << ")\n";
-}
-
-uint32_t reverse_bits_32(uint32_t n) {
-    uint32_t result = 0;
-    for (int i = 0; i < 32; ++i) {
-        result <<= 1;
-        result |= (n & 1);
-        n >>= 1;
-    }
-    return result;
 }
 
 void print_packet_info(const SlowPacket& pkt, ssize_t received_size, bool type) {
@@ -164,7 +121,10 @@ bool SlowClient::receive_setup() {
 }
 
 bool SlowClient::send_data(const uint8_t* data, size_t length) {
-    if (length > MAX_DATA_SIZE) return false;
+    if (length > MAX_DATA_SIZE){
+        std::cout << "Mensagem excede o limite de bits, fragmentando...\n\n"; 
+        return send_fragmented_data(data, length);  // Nova função chamada aqui
+    }
 
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
@@ -192,6 +152,53 @@ bool SlowClient::send_data(const uint8_t* data, size_t length) {
     return sent >= (ssize_t)(SLOW_HEADER_SIZE + length);
 }
 
+bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
+    size_t offset = 0;
+    uint16_t fragment_id = ++fid_counter; // Novo FID para essa mensagem
+
+    uint32_t fragment_offset = 0; // fo começa em 0
+
+    while (offset < length) {
+        size_t chunk_size = std::min(length - offset, (size_t)MAX_DATA_SIZE);
+
+        SlowPacket pkt{};
+        std::memcpy(pkt.sid, session_id, UUID_SIZE);
+
+        // Ativa a flag MB apenas se ainda restarem fragmentos após este
+        uint8_t flags = FLAG_ACK;
+        if (offset + chunk_size < length) {
+            flags |= FLAG_MB; // MB ligada nos fragmentos intermediários
+        }
+        pkt.sttl_flags = encode_sttl_flags(session_ttl, flags);
+
+        pkt.seqnum = ++seqnum;
+        pkt.acknum = acknum;
+        pkt.window = window_size;
+        pkt.fid = fragment_id;
+        pkt.fo = fragment_offset++;
+        std::memcpy(pkt.data, data + offset, chunk_size);
+
+        SlowPacket pkt_net = pkt;
+        pkt_net.sttl_flags = htonl(pkt.sttl_flags);
+        pkt_net.seqnum     = htonl(pkt.seqnum);
+        pkt_net.acknum     = htonl(pkt.acknum);
+        pkt_net.window     = htons(pkt.window);
+
+        ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE + chunk_size, 0,
+                              (sockaddr*)&server_addr, sizeof(server_addr));
+
+        print_packet_info(pkt, SLOW_HEADER_SIZE + chunk_size, 0);
+
+        if (sent < (ssize_t)(SLOW_HEADER_SIZE + chunk_size)) {
+            std::cerr << "Erro ao enviar fragmento na posição " << offset << "\n";
+            return false;
+        }
+
+        offset += chunk_size;
+    }
+
+    return true;
+}
 
 bool SlowClient::send_ack() {
     SlowPacket pkt{};

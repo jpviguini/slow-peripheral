@@ -1,6 +1,6 @@
 CXX=g++
 CXXFLAGS=-std=c++17 -Wall -Iinclude
-SRC=src/main.cpp src/slow_client.cpp
+SRC=src/main.cpp src/slow_client.cpp src/utils.cpp
 OUT=slow_client
 LDFLAGS = -pthread
 
