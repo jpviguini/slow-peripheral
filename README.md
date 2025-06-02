@@ -108,6 +108,34 @@ Após o handshake, o peripheral pode enviar dados para o central:
 
 ---
 
+### 🧵 5. Threads de Comunicação
+
+* O peripheral utiliza **duas threads paralelas** para melhorar a comunicação:
+
+  * Uma **thread de envio**, que retira mensagens da fila e as envia via UDP
+  * Uma **thread de recebimento**, que escuta constantemente por respostas do central
+* A comunicação entre as threads e o programa principal é feita com:
+
+  * Fila protegida por `mutex`
+  * `condition_variable` para acordar a thread de envio quando há mensagens
+* Essa estrutura evita bloqueios e permite a **transmissão contínua e responsiva**
+
+---
+
+### 📶 6. Controle de Fluxo com Janela Deslizante
+
+* O peripheral implementa uma **janela de envio** para gerenciar os pacotes pendentes:
+
+  * Cada pacote enviado é registrado com seu `seqnum`
+  * A janela só avança quando os ACKs correspondentes são recebidos
+* O campo `window`, enviado pelo central, limita o número de pacotes pendentes
+* Caso a janela esteja cheia:
+
+  * Novos pacotes não são enviados até que ACKs liberem espaço
+* Esse controle evita sobrecarga e **garante confiabilidade na transmissão**
+
+---
+
 ### 🛠️ Estrutura do Pacote (slow_packet_t)
 
 Todos os pacotes seguem a estrutura abaixo, em formato **little endian**:
