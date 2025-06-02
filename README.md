@@ -22,6 +22,7 @@ slow-peripheral/
 ├── src/
 │   ├── main.cpp               # Entrada principal da aplicação
 │   └── slow_client.cpp        # Implementação da lógica do cliente SLOW
+│   └── utils.cpp              # Funções auxiliares
 ├── Makefile                   # Script de build
 └── README.md                  # Este arquivo
 ```
@@ -85,7 +86,7 @@ Após o handshake, o peripheral pode enviar dados para o central:
     - A flag `MB` (More Bits) indica se ainda há fragmentos a serem enviados
 - O campo `window`, recebido do central, representa o tamanho da **janela de recepção disponível** (controle de fluxo)
   - O peripheral **deve respeitar** essa janela e só enviar pacotes se houver espaço
-- Se não receber um `ACK` dentro do tempo limite, o pacote é **reenviado**
+
 
 ---
 
