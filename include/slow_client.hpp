@@ -44,6 +44,8 @@ public:
     // Exibe os pacotes pendentes armazenados na janela
     void debug_print_pacotes_pendentes() const;
 
+    bool janela_tem_pacotes_pendentes() const;
+
     bool process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes);
     bool send_connect();
     bool send_fragmented_data(const uint8_t* data, size_t length);

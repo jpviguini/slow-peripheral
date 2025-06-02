@@ -51,7 +51,9 @@ bool SlowClient::send_connect() {
 bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes) {
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
     if (received_bytes < SLOW_HEADER_SIZE) {
-        std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
+        if (janela_tem_pacotes_pendentes()) {
+            std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
+        }
         return false;
     }
 
@@ -224,4 +226,8 @@ bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
     }
 
     return true;
+}
+
+bool SlowClient::janela_tem_pacotes_pendentes() const {
+    return janela_envio.calcular_tamanho_disponivel() < 1024;
 }

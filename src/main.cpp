@@ -1,37 +1,50 @@
 #include "slow_client.hpp"
+#include "slow_threads.hpp" // Gerenciador de threads
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
 
 int main() {
     try {
         // Inicializa cliente com IP do servidor
         SlowClient client("142.93.184.175");
 
-        std::cout << ">> Enviando pacote CONNECT...\n\n";
+        std::cout << ">> Enviando pacote CONNECT...\n";
         if (!client.send_connect())
             throw std::runtime_error("Falha ao enviar CONNECT");
 
         client.debug_print_pacotes_pendentes();
 
-        std::cout << "\n>> Aguardando resposta do servidor...\n";
+        std::cout << "\n>> Aguardando resposta de Setup do servidor...\n";
         if (!client.receive_setup())
             throw std::runtime_error("Sem resposta do servidor");
 
         client.debug_print_pacotes_pendentes();
 
-        // Dados para envio
-        std::cout << "\n>> Enviando dados de teste...\n";
+        std::cout << "\n";
 
-        const char* msg = "oi";
-        if (!client.send_data(reinterpret_cast<const uint8_t*>(msg), strlen(msg)))
-            throw std::runtime_error("Falha ao enviar dados");
+        // Inicia as threads de envio e recebimento
+        SlowThreadManager threads(client);
+        threads.iniciar();
 
-        client.debug_print_pacotes_pendentes();
+        // Enfileira mensagens para envio
+        std::string entrada;
+        while (true) {
+            std::cout << "> Digite sua mensagem (ou 'sair'): ";
+            std::getline(std::cin, entrada);
 
-        // Recebe ACK da mensagem de dados
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta para os dados enviados.\n";
+            if (entrada == "sair") break;
+
+            std::vector<uint8_t> dados(entrada.begin(), entrada.end());
+            threads.enfileirar_mensagem(dados);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));  // Aguarda 300 ms
+        }
+
+        // Espera a comunicação ocorrer
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
         client.debug_print_pacotes_pendentes();
 
@@ -42,9 +55,8 @@ int main() {
 
         client.debug_print_pacotes_pendentes();
 
-        // Recebe ACK da desconexão
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta ao disconnect.\n";
+        // Finaliza as threads com segurança
+        threads.parar();
 
         client.debug_print_pacotes_pendentes();
 
