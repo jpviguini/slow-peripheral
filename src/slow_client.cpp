@@ -100,7 +100,10 @@ bool SlowClient::receive_response() {
 }
 
 bool SlowClient::send_data(const uint8_t* data, size_t length) {
-    if (length > MAX_DATA_SIZE) return false;
+    if (length > MAX_DATA_SIZE){
+        std::cout << "Mensagem excede o limite de bits, fragmentando...\n\n"; 
+        return send_fragmented_data(data, length); 
+    }
 
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);

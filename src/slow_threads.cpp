@@ -57,7 +57,7 @@ void SlowThreadManager::thread_recebimento() {
         ssize_t bytes = 0;
 
         if (client.process_received_packet(pkt, bytes)) {
-            // ACKs já processados internamente
+            client.debug_print_pacotes_pendentes();
         } else {
             // Só exibe aviso se há pacotes pendentes aguardando ACK
             if (client.janela_tem_pacotes_pendentes()) {

@@ -23,8 +23,6 @@ int main() {
 
         client.debug_print_pacotes_pendentes();
 
-        std::cout << "\n";
-
         // Inicia as threads de envio e recebimento
         SlowThreadManager threads(client);
         threads.iniciar();
@@ -32,7 +30,7 @@ int main() {
         // Enfileira mensagens para envio
         std::string entrada;
         while (true) {
-            std::cout << "> Digite sua mensagem (ou 'sair'): ";
+            std::cout << "\n> Digite sua mensagem (ou 'sair'): ";
             std::getline(std::cin, entrada);
 
             if (entrada == "sair") break;
@@ -57,8 +55,6 @@ int main() {
 
         // Finaliza as threads com segurança
         threads.parar();
-
-        client.debug_print_pacotes_pendentes();
 
         std::cout << "\n>> Sessão encerrada com sucesso.\n";
 
