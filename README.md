@@ -135,8 +135,17 @@ Todos os pacotes seguem a estrutura abaixo, em formato **little endian**:
 [3] Disconnect ----------------> central
                    <----------- Ack
 ```
+---
 
+### 🐍 Servidor UDP em Python (Simulador Silencioso)
 
+Para testar o mecanismo de **reenvio automático de mensagens** após o timeout da janela de envio, foi desenvolvido um servidor UDP simples em Python. Esse servidor **recebe os pacotes do cliente**, mas **não envia nenhuma resposta** (ACK). Assim, ele permite verificar se o cliente está corretamente reenviando os pacotes que permanecem no buffer por tempo excessivo.
+
+Esse teste é fundamental para validar a robustez do protocolo de envio confiável (SLOW), garantindo que o cliente consiga detectar falhas na comunicação e tentar retransmissões automaticamente.
+
+> O servidor imprime apenas o primeiro pacote de conexão (`CONNECT`) recebido e, em seguida, conta silenciosamente quantas vezes cada pacote com o mesmo `SEQNUM` é reenviado.
+
+---
 
 ## <div id="licenca"></div>Licença
 Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para mais detalhes.
