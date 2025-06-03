@@ -3,9 +3,8 @@
 void JanelaEnvio::registrar_envio(uint32_t seqnum, const SlowPacket& pacote) {
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
-    // Adiciona o pacote ao buffer se ainda houver espaço
     if (pacotes_pendentes.size() < TAMANHO_JANELA) {
-        pacotes_pendentes[seqnum] = pacote;
+        pacotes_pendentes[seqnum] = {pacote, Clock::now()};
     }
 }
 
@@ -31,7 +30,7 @@ std::vector<SlowPacket> JanelaEnvio::listar_pendentes() const {
 
     std::vector<SlowPacket> lista;
     for (const auto& par : pacotes_pendentes)
-        lista.push_back(par.second);
+        lista.push_back(par.second.first);
 
     return lista;
 }
@@ -46,14 +45,32 @@ void JanelaEnvio::imprimir_pacotes_pendentes() const {
         return;
     }
 
-    for (const auto& [seq, pkt] : pacotes_pendentes) {
+    for (const auto& [seq, par] : pacotes_pendentes) {
+        const auto& pkt = par.first;  // par é um std::pair<SlowPacket, time_point>
         std::cout << "SEQNUM: " << pkt.seqnum
-                  << " | ACKNUM: " << pkt.acknum
-                  << " | FID: " << static_cast<int>(pkt.fid)
-                  << " | FO: " << static_cast<int>(pkt.fo)
-                  << " | WINDOW: " << pkt.window
-                  << "\n";
+                << " | ACKNUM: " << pkt.acknum
+                << " | FID: " << static_cast<int>(pkt.fid)
+                << " | FO: " << static_cast<int>(pkt.fo)
+                << " | WINDOW: " << pkt.window
+                << "\n";
     }
 
+
     std::cout << "------------------------------------\n";
+}
+
+std::vector<SlowPacket> JanelaEnvio::verificar_timeouts(std::chrono::milliseconds limite) {
+    std::lock_guard<std::mutex> trava(mutex_buffer);
+    std::vector<SlowPacket> para_reenvio;
+    auto agora = Clock::now();
+
+    for (auto& [seq, par] : pacotes_pendentes) {
+        auto& [pkt, tempo] = par;
+        if (agora - tempo > limite) {
+            para_reenvio.push_back(pkt);
+            tempo = agora;  // Atualiza tempo para evitar reenvio contínuo
+        }
+    }
+
+    return para_reenvio;
 }

@@ -4,6 +4,11 @@
 #include <vector>
 #include <iostream>
 #include "slow_packet.hpp"
+#include <chrono>
+
+using Clock = std::chrono::steady_clock;
+using TempoEnvio = Clock::time_point;
+
 
 /**
  * Classe responsável por gerenciar os pacotes enviados
@@ -26,9 +31,11 @@ public:
     // Imprime todos os pacotes do buffer
     void imprimir_pacotes_pendentes() const;
 
+    std::vector<SlowPacket> verificar_timeouts(std::chrono::milliseconds limite);
+
 private:
     mutable std::mutex mutex_buffer;
-    std::map<uint32_t, SlowPacket> pacotes_pendentes;
+    std::map<uint32_t, std::pair<SlowPacket, TempoEnvio>> pacotes_pendentes;
 
     // Tamanho máximo da janela de envio (buffer local)
     static constexpr size_t TAMANHO_JANELA = 1024;

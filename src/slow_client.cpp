@@ -48,7 +48,7 @@ bool SlowClient::send_connect() {
 }
 
 
-bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes) {
+bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print) {
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
     if (received_bytes < SLOW_HEADER_SIZE) {
         if (janela_tem_pacotes_pendentes()) {
@@ -57,12 +57,18 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
         return false;
     }
 
-    // Converte para exibição e lógica
-    SlowPacket printable = packet_out;
-    printable.seqnum = ntohl(packet_out.seqnum);
-    printable.acknum = ntohl(packet_out.acknum);
 
-    print_packet_info(printable, received_bytes, 1);
+    if (!flag_print) {
+        // Converte para exibição e lógica
+        SlowPacket printable = packet_out;
+        printable.seqnum = ntohl(packet_out.seqnum);
+        printable.acknum = ntohl(packet_out.acknum);
+        print_packet_info(printable, received_bytes, 1);
+    } else {
+        print_packet_info(packet_out, received_bytes, 1);
+    }
+
+    
 
     // Atualiza estado do cliente
     session_ttl = packet_out.sttl_flags & 0x07FFFFFF;
@@ -80,7 +86,7 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
 bool SlowClient::receive_setup() {
     SlowPacket response{};
     ssize_t received;
-    if (!process_received_packet(response, received))
+    if (!process_received_packet(response, received, 1))
         return false;
 
     // Inicializa nova sessão a partir da resposta
@@ -96,7 +102,7 @@ bool SlowClient::receive_setup() {
 bool SlowClient::receive_response() {
     SlowPacket response{};
     ssize_t received;
-    return process_received_packet(response, received);
+    return process_received_packet(response, received, 0);
 }
 
 bool SlowClient::send_data(const uint8_t* data, size_t length) {
@@ -233,4 +239,19 @@ bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
 
 bool SlowClient::janela_tem_pacotes_pendentes() const {
     return janela_envio.calcular_tamanho_disponivel() < 1024;
+}
+
+
+bool SlowClient::reenviar_pacote(const SlowPacket& pkt) {
+    SlowPacket pkt_net = pkt;
+    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
+    pkt_net.seqnum = htonl(pkt.seqnum);
+    pkt_net.acknum = htonl(pkt.acknum);
+    pkt_net.window = htons(pkt.window);
+
+    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+                          (sockaddr*)&server_addr, sizeof(server_addr));
+
+    print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
+    return sent == SLOW_HEADER_SIZE;
 }

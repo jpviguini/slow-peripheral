@@ -31,32 +31,49 @@ void SlowThreadManager::enfileirar_mensagem(const std::vector<uint8_t>& dados) {
 }
 
 void SlowThreadManager::thread_envio() {
+    using namespace std::chrono_literals;
+
     while (executando) {
         std::vector<uint8_t> dados;
 
         {
             std::unique_lock<std::mutex> lock(mutex_fila);
-            cond_var.wait(lock, [&]() {
+            cond_var.wait_for(lock, 100ms, [&]() {
                 return !fila_envio.empty() || !executando;
             });
 
             if (!executando) break;
-            dados = fila_envio.front();
-            fila_envio.pop();
+
+            if (!fila_envio.empty()) {
+                dados = fila_envio.front();
+                fila_envio.pop();
+            }
         }
 
-        if (!client.send_data(dados.data(), dados.size())) {
-            std::cerr << "[ERRO] Falha no envio de dados pela thread.\n";
+        // Se havia dados, envia
+        if (!dados.empty()) {
+            if (!client.send_data(dados.data(), dados.size())) {
+                std::cerr << "[ERRO] Falha no envio de dados pela thread.\n";
+            }
         }
+
+        // Verifica pacotes que precisam de reenvio
+        auto reenviaveis = client.get_janela_envio().verificar_timeouts(std::chrono::milliseconds(2000));
+        for (const auto& pkt : reenviaveis) {
+            client.reenviar_pacote(pkt);
+        }
+
+        std::this_thread::sleep_for(10ms);
     }
 }
+
 
 void SlowThreadManager::thread_recebimento() {
     while (executando) {
         SlowPacket pkt{};
         ssize_t bytes = 0;
 
-        if (client.process_received_packet(pkt, bytes)) {
+        if (client.process_received_packet(pkt, bytes, 0)) {
             client.debug_print_pacotes_pendentes();
         } else {
             // Só exibe aviso se há pacotes pendentes aguardando ACK

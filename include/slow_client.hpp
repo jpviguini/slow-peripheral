@@ -46,8 +46,10 @@ public:
 
     bool janela_tem_pacotes_pendentes() const;
 
-    bool process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes);
+    bool process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print);
     bool send_connect();
+    bool reenviar_pacote(const SlowPacket& pkt);
+    JanelaEnvio& get_janela_envio() { return janela_envio; }
     bool send_fragmented_data(const uint8_t* data, size_t length);
     bool receive_setup();
     bool send_data(const uint8_t* data, size_t length);
