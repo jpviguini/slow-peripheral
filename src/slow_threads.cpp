@@ -58,7 +58,7 @@ void SlowThreadManager::thread_envio() {
         }
 
         // Verifica pacotes que precisam de reenvio
-        auto reenviaveis = client.get_janela_envio().verificar_timeouts(std::chrono::milliseconds(2000));
+        auto reenviaveis = client.get_janela_envio().verificar_timeouts(std::chrono::milliseconds(TEMPO_REENVIO));
         for (const auto& pkt : reenviaveis) {
             client.reenviar_pacote(pkt);
         }
@@ -77,9 +77,9 @@ void SlowThreadManager::thread_recebimento() {
             client.debug_print_pacotes_pendentes();
         } else {
             // Só exibe aviso se há pacotes pendentes aguardando ACK
-            if (client.janela_tem_pacotes_pendentes()) {
-                std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
-            }
+            // if (client.janela_tem_pacotes_pendentes()) {
+            //     std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
+            // }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

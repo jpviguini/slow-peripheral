@@ -8,6 +8,7 @@
 #include "slow_packet.hpp"
 
 #define SERVER_PORT 7033
+#define TIMEOUT_RECVFROM 5
 
 // Flags
 #define FLAG_CONNECT 0x10

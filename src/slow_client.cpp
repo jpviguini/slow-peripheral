@@ -7,7 +7,7 @@ SlowClient::SlowClient(const std::string& server_ip) {
     if (sockfd < 0)
         throw std::runtime_error("Erro ao criar socket");
 
-    struct timeval tv = {5, 0}; // Timeout de 5 segundos para recvfrom
+    struct timeval tv = {TIMEOUT_RECVFROM, 0}; // Timeout de 5 segundos para recvfrom
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     // Configuração do endereço do servidor
@@ -57,7 +57,6 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
         return false;
     }
 
-
     if (!flag_print) {
         // Converte para exibição e lógica
         SlowPacket printable = packet_out;
@@ -67,8 +66,6 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     } else {
         print_packet_info(packet_out, received_bytes, 1);
     }
-
-    
 
     // Atualiza estado do cliente
     session_ttl = packet_out.sttl_flags & 0x07FFFFFF;
@@ -252,6 +249,6 @@ bool SlowClient::reenviar_pacote(const SlowPacket& pkt) {
     ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
-    print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
+    print_packet_info(pkt, SLOW_HEADER_SIZE, 2);
     return sent == SLOW_HEADER_SIZE;
 }

@@ -6,6 +6,8 @@
 #include <atomic>
 #include <vector>
 
+#define TEMPO_REENVIO 3000
+
 class SlowClient;
 
 class SlowThreadManager {
