@@ -1,4 +1,5 @@
 #include "utils.cpp"
+#include <fstream>
 
 SlowClient::SlowClient(const std::string& server_ip) {
     srand(time(nullptr)); // Inicializa gerador de números aleatórios para eventual UUID
@@ -50,6 +51,9 @@ bool SlowClient::send_connect() {
 
 bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print) {
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
+    
+    std::cout << "bytes recebidos: " <<  received_bytes << "\n";
+
     if (received_bytes < SLOW_HEADER_SIZE) {
         if (janela_tem_pacotes_pendentes()) {
             std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
@@ -96,6 +100,30 @@ bool SlowClient::receive_setup() {
     return true;
 }
 
+bool SlowClient::receive_revive() {
+    SlowPacket response{};
+    ssize_t received;    // problema no received. tem que mandar o anterior?
+
+ 
+    if (!process_received_packet(response, received, 1))
+        return false;
+
+    // Testa se o servidor devolve a flag de aceite
+    if (!(response.sttl_flags & FLAG_ACCEPT)) {
+        std::cerr << ">> Revive rejeitado pelo servidor\n";
+        return false;  // servidor rejeitou o revive
+    }
+
+    // Restaura os dados da sessão
+    std::memcpy(session_id, response.sid, UUID_SIZE);
+    seqnum = response.seqnum;
+    acknum = response.seqnum;
+
+    janela_envio.confirmar_recebimento(acknum);
+
+    return true;
+}
+
 bool SlowClient::receive_response() {
     SlowPacket response{};
     ssize_t received;
@@ -133,6 +161,98 @@ bool SlowClient::send_data(const uint8_t* data, size_t length) {
     print_packet_info(pkt, SLOW_HEADER_SIZE + length, 0);
 
     return sent >= (ssize_t)(SLOW_HEADER_SIZE + length);
+}
+
+void SlowClient::salvar_sessao_em_arquivo() const {
+    std::ofstream arquivo("session.dat", std::ios::binary);
+    if (!arquivo) return;
+
+    arquivo.write(reinterpret_cast<const char*>(session_id), UUID_SIZE);
+
+    // pega o tempo absoluto
+    auto agora = std::chrono::system_clock::now().time_since_epoch();
+    auto segundos = std::chrono::duration_cast<std::chrono::seconds>(agora).count();
+
+    arquivo.write(reinterpret_cast<const char*>(&segundos), sizeof(int64_t));
+
+    arquivo.write(reinterpret_cast<const char*>(&session_ttl), sizeof(uint32_t));
+}
+
+
+bool SlowClient::carregar_sessao_do_arquivo() {
+    std::ifstream arquivo("session.dat", std::ios::binary);
+    if (!arquivo) return false;
+
+    arquivo.read(reinterpret_cast<char*>(session_id), UUID_SIZE);
+
+    int64_t segundos_desde_epoca;
+    arquivo.read(reinterpret_cast<char*>(&segundos_desde_epoca), sizeof(int64_t));
+
+    arquivo.read(reinterpret_cast<char*>(&session_ttl), sizeof(uint32_t));
+
+    // Pega tempo atual nos dois relógios
+    auto agora_system = std::chrono::system_clock::now();
+    auto agora_steady = std::chrono::steady_clock::now();
+
+    // Reconstroi o tempo salvo no arquivo como time_point do system_clock
+    auto tempo_salvo_system = std::chrono::system_clock::time_point(std::chrono::seconds(segundos_desde_epoca));
+
+    // Calcula o tempo decorrido desde que salvou a sessão 
+    auto diff = agora_system - tempo_salvo_system;
+
+    // Ajusta session_start_time subtraindo o tempo decorrido
+    session_start_time = agora_steady - std::chrono::duration_cast<std::chrono::steady_clock::duration>(diff);
+
+    return true;
+}
+
+bool SlowClient::has_valid_session() const {
+    // Verifica se o session_id está definido 
+    if (is_nil_uuid(session_id)) {
+        return false;
+    }
+
+    // Verifica se a sessão ainda está no tempo válido
+    auto agora = std::chrono::steady_clock::now();
+    auto duracao = std::chrono::duration_cast<std::chrono::seconds>(agora - session_start_time);
+
+    return duracao.count() < session_ttl;
+}
+
+bool SlowClient::is_nil_uuid(const uint8_t* uuid) const {
+    for (int i = 0; i < UUID_SIZE; ++i) {
+        if (uuid[i] != 0) return false;
+    }
+    return true;
+}
+
+
+
+bool SlowClient::send_revive() {
+    SlowPacket pkt{};
+    std::memcpy(pkt.sid, session_id, UUID_SIZE);
+
+    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_REVIVE);  // revive ligado
+    pkt.seqnum = ++seqnum;
+    pkt.acknum = acknum;
+    pkt.window = janela_envio.calcular_tamanho_disponivel();
+
+    // Conversão para formato de rede
+    SlowPacket pkt_net = pkt;
+    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
+    pkt_net.seqnum = htonl(pkt.seqnum);
+    pkt_net.acknum = htonl(pkt.acknum);
+    pkt_net.window = htons(pkt.window);
+
+    janela_envio.registrar_envio(pkt.seqnum, pkt);
+
+
+    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+                          (sockaddr*)&server_addr, sizeof(server_addr));
+
+    print_packet_info(pkt_net, SLOW_HEADER_SIZE, 0);
+    
+    return sent == (ssize_t)SLOW_HEADER_SIZE;
 }
 
 
