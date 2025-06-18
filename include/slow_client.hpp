@@ -30,6 +30,7 @@ private:
     int sockfd;
     sockaddr_in server_addr;
     uint8_t session_id[UUID_SIZE];
+    std::chrono::steady_clock::time_point session_start_time;  // quando a sessão começou
     uint32_t session_ttl;
     uint32_t seqnum;
     uint32_t acknum;
@@ -54,6 +55,16 @@ public:
     bool send_fragmented_data(const uint8_t* data, size_t length);
     bool receive_setup();
     bool send_data(const uint8_t* data, size_t length);
+
+    /* revive */
+    bool receive_revive();
+    void salvar_sessao_em_arquivo() const;
+    bool carregar_sessao_do_arquivo();
+    bool is_nil_uuid(const uint8_t* uuid) const;
+    bool has_valid_session() const;
+    bool send_revive();
+
+
     bool send_ack();
     bool send_disconnect();
     bool receive_response();

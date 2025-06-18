@@ -8,18 +8,25 @@
 
 int main() {
     try {
-        // Inicializa cliente com IP do servidor
         SlowClient client("142.93.184.175");
+        bool revive_ok = false;
 
-        std::cout << ">> Enviando pacote CONNECT...\n";
-        if (!client.send_connect())
-            throw std::runtime_error("Falha ao enviar CONNECT");
+        if (client.carregar_sessao_do_arquivo() && client.has_valid_session()) {
+            std::cout << ">> Tentando revive com sessão anterior...\n";
+            revive_ok = client.send_revive();
+            std::cout << "revive enviado? (1=sim, 0=nao) " << revive_ok << "\n";
 
-        client.debug_print_pacotes_pendentes();
+            if (!client.receive_revive()) throw std::runtime_error("REVIVE não recebido");
+        }
 
-        std::cout << "\n>> Aguardando resposta de Setup do servidor...\n";
-        if (!client.receive_setup())
-            throw std::runtime_error("Sem resposta do servidor");
+        if (!revive_ok) {
+            std::cout << ">> Sessão inválida ou revive falhou, conectando normalmente...\n";
+            if (!client.send_connect()) throw std::runtime_error("CONNECT falhou");
+            if (!client.receive_setup()) throw std::runtime_error("SETUP não recebido");
+
+
+            client.salvar_sessao_em_arquivo(); // Salva nova sessão para uso futuro
+        }
 
         client.debug_print_pacotes_pendentes();
 
@@ -38,24 +45,17 @@ int main() {
             std::vector<uint8_t> dados(entrada.begin(), entrada.end());
             threads.enfileirar_mensagem(dados);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));  // Aguarda 300 ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
         }
 
-        // Espera a comunicação ocorrer
         std::this_thread::sleep_for(std::chrono::seconds(1));
-
         client.debug_print_pacotes_pendentes();
 
-        // Envia sinal de encerramento
         std::cout << "\n>> Enviando DISCONNECT...\n";
         if (!client.send_disconnect())
             throw std::runtime_error("Falha ao desconectar");
 
-        client.debug_print_pacotes_pendentes();
-
-        // Finaliza as threads com segurança
         threads.parar();
-
         std::cout << "\n>> Sessão encerrada com sucesso.\n";
 
     } catch (const std::exception& e) {
