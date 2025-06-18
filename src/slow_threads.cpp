@@ -75,9 +75,7 @@ void SlowThreadManager::thread_recebimento() {
 
         if (client.process_received_packet(pkt, bytes, 0)) {
             client.debug_print_pacotes_pendentes();
-        } else {
-            // Só exibe aviso se há pacotes pendentes aguardando ACK
-        }
+        } 
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         

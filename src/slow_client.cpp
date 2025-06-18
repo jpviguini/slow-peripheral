@@ -84,7 +84,6 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     return true;
 }
 
-
 bool SlowClient::receive_setup() {
     SlowPacket response{};
     ssize_t received;
@@ -104,7 +103,6 @@ bool SlowClient::receive_setup() {
 bool SlowClient::receive_revive() {
     SlowPacket response{};
     ssize_t received;    // problema no received. tem que mandar o anterior?
-
  
     if (!process_received_packet(response, received, 1))
         return false;
@@ -229,15 +227,13 @@ bool SlowClient::is_nil_uuid(const uint8_t* uuid) const {
     return true;
 }
 
-
-
 bool SlowClient::send_revive() {
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
-    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK| FLAG_REVIVE);  // Revive ligado
-    pkt.seqnum = 9654;
-    pkt.acknum = acknum;
+    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK | FLAG_REVIVE);  // Revive ligado
+    pkt.seqnum = ++seqnum;
+    pkt.acknum = seqnum - 1;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
     // Conversão para formato de rede

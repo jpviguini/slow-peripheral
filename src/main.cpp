@@ -9,8 +9,6 @@
 int main() {
     try {
         SlowClient client("142.93.184.175");
-
-
         std::string modo;
         std::cout << ">> Deseja iniciar com REVIVE ou CONNECT? (revive/connect): ";
         std::getline(std::cin, modo);
@@ -20,10 +18,13 @@ int main() {
             if (client.carregar_sessao_do_arquivo() && client.has_valid_session()) {
                 std::cout << ">> Tentando revive com sessão anterior...\n";
                 if (client.send_revive()) {
-                    conectado = client.receive_revive();
-                    if (!conectado) std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
+                    // conectado = client.receive_response();
+                    // conectado = client.receive_revive();
+                    // if (!conectado) std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
+                    return 0;
                 } else {
                     std::cerr << ">> Falha ao enviar REVIVE.\n";
+                    return 0;
                 }
             } else {
                 std::cerr << ">> Sessão inválida ou inexistente para REVIVE.\n";
@@ -65,8 +66,25 @@ int main() {
         if (!client.send_disconnect())
             throw std::runtime_error("Falha ao desconectar");
 
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
         threads.parar();
         std::cout << "\n>> Sessão encerrada com sucesso.\n";
+
+        std::cout << "\n>> Tentando REVIVE após DISCONNECT...\n";
+
+        // Aguarde um pouco simulando reconexão
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
+        if (client.send_revive()) {
+            if (!client.receive_response()) {
+                std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
+            } else {
+                std::cout << ">> Sessão revivida com sucesso!\n";
+            }
+        } else {
+            std::cerr << ">> Falha ao enviar pacote REVIVE.\n";
+        }
 
     } catch (const std::exception& e) {
         std::cerr << "Erro: " << e.what() << "\n";
