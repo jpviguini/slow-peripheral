@@ -72,7 +72,7 @@ uint32_t reverse_bits_32(uint32_t n) {
 
 // Informações do pacote (recebido ou enviado)
 void print_packet_info(const SlowPacket& pkt, ssize_t received_size, int type, int reenviado = 0){
-    std::cout << "TTL (27 bits): " << std::bitset<32>(pkt.sttl_flags) << std::endl;
+    // std::cout << "TTL (27 bits): " << std::bitset<32>(pkt.sttl_flags) << std::endl;
     uint32_t ttl = (pkt.sttl_flags >> 5) & 0x07FFFFFF;
     uint32_t flags = pkt.sttl_flags & 0x00FFFFFF;
 

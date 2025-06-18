@@ -9,23 +9,33 @@
 int main() {
     try {
         SlowClient client("142.93.184.175");
-        bool revive_ok = false;
 
-        if (client.carregar_sessao_do_arquivo() && client.has_valid_session()) {
-            std::cout << ">> Tentando revive com sessão anterior...\n";
-            revive_ok = client.send_revive();
-            std::cout << "revive enviado? (1=sim, 0=nao) " << revive_ok << "\n";
 
-            if (!client.receive_revive()) throw std::runtime_error("REVIVE não recebido");
+        std::string modo;
+        std::cout << ">> Deseja iniciar com REVIVE ou CONNECT? (revive/connect): ";
+        std::getline(std::cin, modo);
+
+        bool conectado = false;
+        if (modo == "revive") {
+            if (client.carregar_sessao_do_arquivo() && client.has_valid_session()) {
+                std::cout << ">> Tentando revive com sessão anterior...\n";
+                if (client.send_revive()) {
+                    conectado = client.receive_revive();
+                    if (!conectado) std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
+                } else {
+                    std::cerr << ">> Falha ao enviar REVIVE.\n";
+                }
+            } else {
+                std::cerr << ">> Sessão inválida ou inexistente para REVIVE.\n";
+            }
         }
 
-        if (!revive_ok) {
-            std::cout << ">> Sessão inválida ou revive falhou, conectando normalmente...\n";
+        if (!conectado) {
+            std::cout << ">> Conectando com CONNECT...\n";
             if (!client.send_connect()) throw std::runtime_error("CONNECT falhou");
             if (!client.receive_setup()) throw std::runtime_error("SETUP não recebido");
-
-
-            client.salvar_sessao_em_arquivo(); // Salva nova sessão para uso futuro
+            client.salvar_sessao_em_arquivo();
+            conectado = true;
         }
 
         client.debug_print_pacotes_pendentes();

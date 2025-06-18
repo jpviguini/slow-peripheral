@@ -31,6 +31,7 @@ SlowClient::~SlowClient() {
 
 bool SlowClient::send_connect() {
     SlowPacket pkt{};
+    gerar_nil(session_id);
     std::memset(&pkt, 0, sizeof(pkt));
     std::memcpy(pkt.sid, session_id, UUID_SIZE); // Envia UUID nulo
 
@@ -51,8 +52,6 @@ bool SlowClient::send_connect() {
 
 bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print) {
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
-    
-    std::cout << "bytes recebidos: " <<  received_bytes << "\n";
 
     if (received_bytes < SLOW_HEADER_SIZE) {
         if (janela_tem_pacotes_pendentes()) {
@@ -73,7 +72,8 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     }
 
     // Atualiza estado do cliente
-    session_ttl = packet_out.sttl_flags & 0x07FFFFFF;
+    session_ttl = (packet_out.sttl_flags >> 5) & 0x07FFFFFF;
+
     acknum = packet_out.acknum;
     window_size = packet_out.window;
 
@@ -235,8 +235,8 @@ bool SlowClient::send_revive() {
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
-    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_REVIVE);  // revive ligado
-    pkt.seqnum = ++seqnum;
+    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK| FLAG_REVIVE);  // Revive ligado
+    pkt.seqnum = 9654;
     pkt.acknum = acknum;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
@@ -247,17 +247,15 @@ bool SlowClient::send_revive() {
     pkt_net.acknum = htonl(pkt.acknum);
     pkt_net.window = htons(pkt.window);
 
-    janela_envio.registrar_envio(pkt.seqnum, pkt);
-
+    // janela_envio.registrar_envio(pkt.seqnum, pkt);
 
     ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
-    print_packet_info(pkt_net, SLOW_HEADER_SIZE, 0);
+    print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
     
     return sent == (ssize_t)SLOW_HEADER_SIZE;
 }
-
 
 bool SlowClient::send_ack() {
     SlowPacket pkt{};
@@ -360,7 +358,6 @@ bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
 bool SlowClient::janela_tem_pacotes_pendentes() const {
     return janela_envio.calcular_tamanho_disponivel() < 1024;
 }
-
 
 bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado) {
     SlowPacket pkt_net = pkt;

@@ -30,7 +30,7 @@ private:
     int sockfd;
     sockaddr_in server_addr;
     uint8_t session_id[UUID_SIZE];
-    std::chrono::steady_clock::time_point session_start_time;  // quando a sessão começou
+    std::chrono::steady_clock::time_point session_start_time;  // Quando a sessão começou
     uint32_t session_ttl;
     uint32_t seqnum;
     uint32_t acknum;
