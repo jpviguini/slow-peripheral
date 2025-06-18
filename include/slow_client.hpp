@@ -49,7 +49,7 @@ public:
 
     bool process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print);
     bool send_connect();
-    bool reenviar_pacote(const SlowPacket& pkt);
+    bool reenviar_pacote(const SlowPacket& pkt, int reenviado);
     JanelaEnvio& get_janela_envio() { return janela_envio; }
     bool send_fragmented_data(const uint8_t* data, size_t length);
     bool receive_setup();

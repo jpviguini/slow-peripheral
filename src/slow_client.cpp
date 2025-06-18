@@ -52,7 +52,7 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
     if (received_bytes < SLOW_HEADER_SIZE) {
         if (janela_tem_pacotes_pendentes()) {
-            std::cerr << ">> Nenhuma resposta recebida (timeout ou erro)\n";
+            std::cerr << "\n>> Nenhuma resposta recebida (timeout ou erro)\n";
         }
         return false;
     }
@@ -60,6 +60,7 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     if (!flag_print) {
         // Converte para exibição e lógica
         SlowPacket printable = packet_out;
+
         printable.seqnum = ntohl(packet_out.seqnum);
         printable.acknum = ntohl(packet_out.acknum);
         print_packet_info(printable, received_bytes, 1);
@@ -130,6 +131,8 @@ bool SlowClient::send_data(const uint8_t* data, size_t length) {
     ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE + length, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
+    std::cout << "TTL (27 bits): " << std::bitset<32>(pkt.sttl_flags) << std::endl;
+    
     print_packet_info(pkt, SLOW_HEADER_SIZE + length, 0);
 
     return sent >= (ssize_t)(SLOW_HEADER_SIZE + length);
@@ -239,16 +242,18 @@ bool SlowClient::janela_tem_pacotes_pendentes() const {
 }
 
 
-bool SlowClient::reenviar_pacote(const SlowPacket& pkt) {
+bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado) {
     SlowPacket pkt_net = pkt;
     pkt_net.sttl_flags = htonl(pkt.sttl_flags);
     pkt_net.seqnum = htonl(pkt.seqnum);
     pkt_net.acknum = htonl(pkt.acknum);
     pkt_net.window = htons(pkt.window);
 
-    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+    size_t data_length = strlen(reinterpret_cast<const char*>(pkt_net.data));
+
+    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE + data_length, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
-    print_packet_info(pkt, SLOW_HEADER_SIZE, 2);
-    return sent == SLOW_HEADER_SIZE;
+    print_packet_info(pkt, SLOW_HEADER_SIZE + data_length, 2, reenviado);
+    return sent == (SLOW_HEADER_SIZE + 2);
 }

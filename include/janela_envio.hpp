@@ -8,7 +8,7 @@
 
 using Clock = std::chrono::steady_clock;
 using TempoEnvio = Clock::time_point;
-
+using Reenviado = int;
 
 /**
  * Classe responsável por gerenciar os pacotes enviados
@@ -31,11 +31,11 @@ public:
     // Imprime todos os pacotes do buffer
     void imprimir_pacotes_pendentes() const;
 
-    std::vector<SlowPacket> verificar_timeouts(std::chrono::milliseconds limite);
+    std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> verificar_timeouts(std::chrono::milliseconds limite);
 
 private:
     mutable std::mutex mutex_buffer;
-    std::map<uint32_t, std::pair<SlowPacket, TempoEnvio>> pacotes_pendentes;
+    std::map<uint32_t, std::pair<SlowPacket, std::pair<TempoEnvio, Reenviado>>> pacotes_pendentes;
 
     // Tamanho máximo da janela de envio (buffer local)
     static constexpr size_t TAMANHO_JANELA = 1024;

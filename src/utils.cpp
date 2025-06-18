@@ -71,14 +71,19 @@ uint32_t reverse_bits_32(uint32_t n) {
 
 
 // Informações do pacote (recebido ou enviado)
-void print_packet_info(const SlowPacket& pkt, ssize_t received_size, int type) {
+void print_packet_info(const SlowPacket& pkt, ssize_t received_size, int type, int reenviado = 0){
+    std::cout << "TTL (27 bits): " << std::bitset<32>(pkt.sttl_flags) << std::endl;
     uint32_t ttl = (pkt.sttl_flags >> 5) & 0x07FFFFFF;
     uint32_t flags = pkt.sttl_flags & 0x00FFFFFF;
 
     if (type == 1) {
         std::cout << "\n-------- Pacote Recebido --------\n";
     } else if (type ==2){
-        std::cout << "\n-------- Pacote Reenviado --------\n";
+        if (reenviado > 0){
+            std::cout << "\n-------- Pacote Reenviado (" + std::to_string(reenviado) + "x) --------\n";
+        } else{
+            std::cout << "\n-------- Pacote Reenviado --------\n";
+        }
     } else {
         std::cout << "\n-------- Pacote Enviado --------\n";
     }
@@ -96,7 +101,6 @@ void print_packet_info(const SlowPacket& pkt, ssize_t received_size, int type) {
     size_t data_len = received_size > SLOW_HEADER_SIZE
                       ? received_size - SLOW_HEADER_SIZE
                       : 0;
-
 
     if (data_len > 0) {
         std::cout << "DATA (" << data_len << " bytes): ";

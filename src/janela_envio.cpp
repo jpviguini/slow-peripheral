@@ -4,7 +4,7 @@ void JanelaEnvio::registrar_envio(uint32_t seqnum, const SlowPacket& pacote) {
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     if (pacotes_pendentes.size() < TAMANHO_JANELA) {
-        pacotes_pendentes[seqnum] = {pacote, Clock::now()};
+        pacotes_pendentes[seqnum] = {pacote, {Clock::now(), 0}};
     }
 }
 
@@ -52,6 +52,7 @@ void JanelaEnvio::imprimir_pacotes_pendentes() const {
                 << " | FID: " << static_cast<int>(pkt.fid)
                 << " | FO: " << static_cast<int>(pkt.fo)
                 << " | WINDOW: " << pkt.window
+                << " | Reenviado: " << par.second.second
                 << "\n";
     }
 
@@ -59,18 +60,22 @@ void JanelaEnvio::imprimir_pacotes_pendentes() const {
     std::cout << "------------------------------------\n";
 }
 
-std::vector<SlowPacket> JanelaEnvio::verificar_timeouts(std::chrono::milliseconds limite) {
+std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> JanelaEnvio::verificar_timeouts(std::chrono::milliseconds limite) {
     std::lock_guard<std::mutex> trava(mutex_buffer);
-    std::vector<SlowPacket> para_reenvio;
+    std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> para_reenvio;
     auto agora = Clock::now();
 
     for (auto& [seq, par] : pacotes_pendentes) {
-        auto& [pkt, tempo] = par;
-        if (agora - tempo > limite) {
-            para_reenvio.push_back(pkt);
-            tempo = agora;  // Atualiza tempo para evitar reenvio contínuo
+        auto& [pkt, tempo_info] = par;
+        auto& [ultimo_envio, reenviado] = tempo_info;
+
+        if (agora - ultimo_envio > limite) {
+            reenviado++;  // Atualiza contador de reenvios
+            ultimo_envio = agora;  // Atualiza tempo para evitar reenvio contínuo
+            para_reenvio.emplace_back(seq, pkt, reenviado);
         }
     }
 
     return para_reenvio;
 }
+
