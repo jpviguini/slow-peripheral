@@ -1,7 +1,10 @@
 #include "utils.cpp"
 #include <fstream>
 
-SlowClient::SlowClient(const std::string& server_ip) {
+SlowClient::SlowClient(const std::string& server_ip) 
+/* Inicializa socket UDP, configura timeout e valores iniciais de sessão */
+{
+
     srand(time(nullptr)); // Inicializa gerador de números aleatórios para eventual UUID
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0); // Cria socket UDP
@@ -24,12 +27,16 @@ SlowClient::SlowClient(const std::string& server_ip) {
 }
 
 
-SlowClient::~SlowClient() {
+SlowClient::~SlowClient() 
+/* Fecha o socket ao destruir o cliente */
+{
     close(sockfd); // Fecha o socket ao destruir o cliente
 }
 
 
-bool SlowClient::send_connect() {
+bool SlowClient::send_connect() 
+/* Envia pacote de conexão com UUID nulo e registra na janela de envio */
+{
     SlowPacket pkt{};
     gerar_nil(session_id);
     std::memset(&pkt, 0, sizeof(pkt));
@@ -50,7 +57,9 @@ bool SlowClient::send_connect() {
 }
 
 
-bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print) {
+bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& received_bytes, bool flag_print) 
+/* Recebe pacote, trata timeout, converte campos e atualiza estado de sessão */
+{
     received_bytes = recvfrom(sockfd, &packet_out, sizeof(packet_out), 0, nullptr, nullptr);
 
     if (received_bytes < SLOW_HEADER_SIZE) {
@@ -84,7 +93,9 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     return true;
 }
 
-bool SlowClient::receive_setup() {
+bool SlowClient::receive_setup() 
+/* Aguarda setup do servidor e atualiza session_id e seqnums */
+{
     SlowPacket response{};
     ssize_t received;
     if (!process_received_packet(response, received, 1))
@@ -100,7 +111,9 @@ bool SlowClient::receive_setup() {
     return true;
 }
 
-bool SlowClient::receive_revive() {
+bool SlowClient::receive_revive() 
+/* Aguarda resposta de revive e restaura sessão se aceita */
+{
     SlowPacket response{};
     ssize_t received;    // problema no received. tem que mandar o anterior?
  
@@ -123,13 +136,17 @@ bool SlowClient::receive_revive() {
     return true;
 }
 
-bool SlowClient::receive_response() {
+bool SlowClient::receive_response() 
+/* Processa pacote de dados sem callback extra */
+{
     SlowPacket response{};
     ssize_t received;
     return process_received_packet(response, received, 0);
 }
 
-bool SlowClient::send_data(const uint8_t* data, size_t length) {
+bool SlowClient::send_data(const uint8_t* data, size_t length) 
+/* Envia dado ou fragmenta se exceder tamanho máximo */
+{
     if (length > MAX_DATA_SIZE){
         std::cout << "Mensagem excede o limite de bits, fragmentando...\n\n"; 
         return send_fragmented_data(data, length); 
@@ -164,7 +181,9 @@ bool SlowClient::send_data(const uint8_t* data, size_t length) {
     return sent >= (ssize_t)(SLOW_HEADER_SIZE + length);
 }
 
-void SlowClient::salvar_sessao_em_arquivo() const {
+void SlowClient::salvar_sessao_em_arquivo() const 
+/* Persiste session_id, TTL e timestamp em "session.dat" */
+{
     std::ofstream arquivo("session.dat", std::ios::binary);
     if (!arquivo) return;
 
@@ -180,7 +199,9 @@ void SlowClient::salvar_sessao_em_arquivo() const {
 }
 
 
-bool SlowClient::carregar_sessao_do_arquivo() {
+bool SlowClient::carregar_sessao_do_arquivo() 
+/* Carrega sessão de arquivo e ajusta tempo de início */
+{
     std::ifstream arquivo("session.dat", std::ios::binary);
     if (!arquivo) return false;
 
@@ -207,7 +228,9 @@ bool SlowClient::carregar_sessao_do_arquivo() {
     return true;
 }
 
-bool SlowClient::has_valid_session() const {
+bool SlowClient::has_valid_session() const 
+/* Verifica se session_id é não-nulo e TTL não expirou */
+{
     // Verifica se o session_id está definido 
     if (is_nil_uuid(session_id)) {
         return false;
@@ -220,14 +243,18 @@ bool SlowClient::has_valid_session() const {
     return duracao.count() < session_ttl;
 }
 
-bool SlowClient::is_nil_uuid(const uint8_t* uuid) const {
+bool SlowClient::is_nil_uuid(const uint8_t* uuid) const 
+/* Checa se UUID é todo zeros */
+{
     for (int i = 0; i < UUID_SIZE; ++i) {
         if (uuid[i] != 0) return false;
     }
     return true;
 }
 
-bool SlowClient::send_revive() {
+bool SlowClient::send_revive() 
+/* Envia pacote de revive com flags apropriadas */
+{
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
@@ -253,7 +280,9 @@ bool SlowClient::send_revive() {
     return sent == (ssize_t)SLOW_HEADER_SIZE;
 }
 
-bool SlowClient::send_ack() {
+bool SlowClient::send_ack() 
+/* Envia pacote ACK para confirmação */
+{
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
@@ -272,7 +301,9 @@ bool SlowClient::send_ack() {
 }
 
 
-bool SlowClient::send_disconnect() {
+bool SlowClient::send_disconnect() 
+/* Envia pacote de desconexão e registra na janela */
+{
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
@@ -298,11 +329,15 @@ bool SlowClient::send_disconnect() {
     return sent == SLOW_HEADER_SIZE;
 }
 
-void SlowClient::debug_print_pacotes_pendentes() const {
+void SlowClient::debug_print_pacotes_pendentes() const 
+/* Exibe pacotes pendentes na janela de envio */
+{
     janela_envio.imprimir_pacotes_pendentes();
 }
 
-bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
+bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) 
+/* Fragmenta dados e envia em múltiplos pacotes */
+{
     size_t offset = 0;
     uint16_t fragment_id = ++fid_counter; // Novo FID para essa mensagem
 
@@ -351,11 +386,15 @@ bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length) {
     return true;
 }
 
-bool SlowClient::janela_tem_pacotes_pendentes() const {
+bool SlowClient::janela_tem_pacotes_pendentes() const 
+/* Retorna true se há pacotes não confirmados */
+{
     return janela_envio.calcular_tamanho_disponivel() < 1024;
 }
 
-bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado) {
+bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado) 
+/* Reenvia pacote expirado e imprime informações */
+{
     SlowPacket pkt_net = pkt;
     pkt_net.sttl_flags = htonl(pkt.sttl_flags);
     pkt_net.seqnum = htonl(pkt.seqnum);

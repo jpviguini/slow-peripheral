@@ -1,6 +1,8 @@
 #include "janela_envio.hpp"
 
-void JanelaEnvio::registrar_envio(uint32_t seqnum, const SlowPacket& pacote) {
+void JanelaEnvio::registrar_envio(uint32_t seqnum, const SlowPacket& pacote) 
+/* Adiciona um novo pacote à janela de pendentes se houver espaço disponível */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     if (pacotes_pendentes.size() < TAMANHO_JANELA) {
@@ -8,7 +10,9 @@ void JanelaEnvio::registrar_envio(uint32_t seqnum, const SlowPacket& pacote) {
     }
 }
 
-void JanelaEnvio::confirmar_recebimento(uint32_t acknum) {
+void JanelaEnvio::confirmar_recebimento(uint32_t acknum) 
+/* Remove o pacote correspondente ao ACK recebido da janela de pendentes */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     // Remove o pacote correspondente ao acknum
@@ -18,14 +22,18 @@ void JanelaEnvio::confirmar_recebimento(uint32_t acknum) {
     }
 }
 
-uint16_t JanelaEnvio::calcular_tamanho_disponivel() const {
+uint16_t JanelaEnvio::calcular_tamanho_disponivel() const 
+/* Retorna a quantidade de slots livres na janela de envio */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     // Retorna o espaço restante na janela (campo window)
     return static_cast<uint16_t>(TAMANHO_JANELA - pacotes_pendentes.size());
 }
 
-std::vector<SlowPacket> JanelaEnvio::listar_pendentes() const {
+std::vector<SlowPacket> JanelaEnvio::listar_pendentes() const 
+/* Gera e retorna um vetor com todos os pacotes ainda não confirmados */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     std::vector<SlowPacket> lista;
@@ -35,7 +43,9 @@ std::vector<SlowPacket> JanelaEnvio::listar_pendentes() const {
     return lista;
 }
 
-void JanelaEnvio::imprimir_pacotes_pendentes() const {
+void JanelaEnvio::imprimir_pacotes_pendentes() const 
+/* Exibe no console detalhes de cada pacote pendente na janela */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
 
     std::cout << "\n--- Pacotes Pendentes na Janela ---\n";
@@ -60,7 +70,9 @@ void JanelaEnvio::imprimir_pacotes_pendentes() const {
     std::cout << "------------------------------------\n";
 }
 
-std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> JanelaEnvio::verificar_timeouts(std::chrono::milliseconds limite) {
+std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> JanelaEnvio::verificar_timeouts(std::chrono::milliseconds limite) 
+/* Verifica quais pacotes excederam o tempo limite e prepara para reenvio */
+{
     std::lock_guard<std::mutex> trava(mutex_buffer);
     std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> para_reenvio;
     auto agora = Clock::now();

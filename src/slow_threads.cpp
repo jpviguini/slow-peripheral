@@ -2,19 +2,23 @@
 #include "slow_client.hpp" 
 
 SlowThreadManager::SlowThreadManager(SlowClient& client_ref)
+/* Armazena a referência ao cliente utilizado para envio/recebimento */
     : client(client_ref) {}
 
 SlowThreadManager::~SlowThreadManager() {
+/* Para e aguarda finalização das threads antes de destruir */
     parar();
 }
 
 void SlowThreadManager::iniciar() {
+/* Aciona as threads de envio e recebimento */
     executando = true;
     t_envio = std::thread(&SlowThreadManager::thread_envio, this);
     t_recebimento = std::thread(&SlowThreadManager::thread_recebimento, this);
 }
 
 void SlowThreadManager::parar() {
+/* Sinaliza parada, notifica e faz join em ambas as threads */
     executando = false;
     cond_var.notify_all();
 
@@ -23,6 +27,7 @@ void SlowThreadManager::parar() {
 }
 
 void SlowThreadManager::enfileirar_mensagem(const std::vector<uint8_t>& dados) {
+/* Adiciona dados à fila de envio e notifica a thread de envio */
     {
         std::lock_guard<std::mutex> lock(mutex_fila);
         fila_envio.push(dados);
@@ -31,6 +36,7 @@ void SlowThreadManager::enfileirar_mensagem(const std::vector<uint8_t>& dados) {
 }
 
 void SlowThreadManager::thread_envio() {
+/* Loop de envio: aguarda fila, envia dados e reenvia pacotes com timeout */
     using namespace std::chrono_literals;
 
     while (executando) {
@@ -69,6 +75,7 @@ void SlowThreadManager::thread_envio() {
 
 
 void SlowThreadManager::thread_recebimento() {
+/* Loop de recebimento: processa pacotes recebidos e exibe debug */
     while (executando) {
         SlowPacket pkt{};
         ssize_t bytes = 0;
