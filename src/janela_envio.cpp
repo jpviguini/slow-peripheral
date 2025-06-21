@@ -91,3 +91,11 @@ std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> JanelaEnvio::verificar_
     return para_reenvio;
 }
 
+void JanelaEnvio::remover_pacote(uint32_t seqnum)
+/* Remove explicitamente um pacote da janela de envio */
+{
+    std::lock_guard<std::mutex> trava(mutex_buffer);
+    pacotes_pendentes.erase(seqnum);
+}
+
+

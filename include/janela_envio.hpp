@@ -31,6 +31,8 @@ public:
     // Imprime todos os pacotes do buffer
     void imprimir_pacotes_pendentes() const;
 
+    void remover_pacote(uint32_t seqnum);
+
     std::vector<std::tuple<uint32_t, SlowPacket, Reenviado>> verificar_timeouts(std::chrono::milliseconds limite);
 
 private:

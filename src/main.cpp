@@ -1,90 +1,82 @@
 #include "slow_client.hpp"
 #include "slow_threads.hpp" // Gerenciador de threads
 #include <iostream>
-#include <cstring>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
 
+void loop_de_mensagens(SlowThreadManager& threads) {
+    std::string entrada;
+    while (true) {
+        std::cout << "\n> Digite sua mensagem (ou 'sair'): ";
+        std::getline(std::cin, entrada);
+        if (entrada == "sair") break;
+
+        std::vector<uint8_t> dados(entrada.begin(), entrada.end());
+        threads.enfileirar_mensagem(dados);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+}
+
+void desconectar(SlowClient& client) {
+    std::cout << "\n>> Enviando DISCONNECT...\n";
+    if (!client.send_disconnect())
+        throw std::runtime_error("Falha ao desconectar");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    while (client.janela_tem_pacotes_pendentes()) {
+        // Esperando pacotes pendentes esvaziarem
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+void tentar_revive(SlowClient& client) {
+    std::cout << "\n>> Tentando REVIVE após DISCONNECT...\n";
+    if (client.send_revive()) {
+        std::cerr << ">> Sucesso ao enviar pacote REVIVE.\n";
+    } else {
+        std::cerr << ">> Falha ao enviar pacote REVIVE.\n";
+    }
+}
+
 int main() {
     try {
         SlowClient client("142.93.184.175");
-        std::string modo;
-        std::cout << ">> Deseja iniciar com REVIVE ou CONNECT? (revive/connect): ";
-        std::getline(std::cin, modo);
 
-        bool conectado = false;
-        if (modo == "revive") {
-            if (client.carregar_sessao_do_arquivo() && client.has_valid_session()) {
-                std::cout << ">> Tentando revive com sessão anterior...\n";
-                if (client.send_revive()) {
-                    // conectado = client.receive_response();
-                    // conectado = client.receive_revive();
-                    // if (!conectado) std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
-                    return 0;
-                } else {
-                    std::cerr << ">> Falha ao enviar REVIVE.\n";
-                    return 0;
-                }
-            } else {
-                std::cerr << ">> Sessão inválida ou inexistente para REVIVE.\n";
-            }
-        }
+        std::cout << ">> Conectando com CONNECT...\n";
+        if (!client.send_connect()) throw std::runtime_error("CONNECT falhou");
+        if (!client.receive_setup()) throw std::runtime_error("SETUP não recebido");
 
-        if (!conectado) {
-            std::cout << ">> Conectando com CONNECT...\n";
-            if (!client.send_connect()) throw std::runtime_error("CONNECT falhou");
-            if (!client.receive_setup()) throw std::runtime_error("SETUP não recebido");
-            client.salvar_sessao_em_arquivo();
-            conectado = true;
-        }
-
-        client.debug_print_pacotes_pendentes();
-
-        // Inicia as threads de envio e recebimento
         SlowThreadManager threads(client);
         threads.iniciar();
 
-        // Enfileira mensagens para envio
-        std::string entrada;
-        while (true) {
-            std::cout << "\n> Digite sua mensagem (ou 'sair'): ";
-            std::getline(std::cin, entrada);
+        client.send_ack();
 
-            if (entrada == "sair") break;
+        std::this_thread::sleep_for(std::chrono::seconds(3));
 
-            std::vector<uint8_t> dados(entrada.begin(), entrada.end());
-            threads.enfileirar_mensagem(dados);
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        loop_de_mensagens(threads);
         client.debug_print_pacotes_pendentes();
 
-        std::cout << "\n>> Enviando DISCONNECT...\n";
-        if (!client.send_disconnect())
-            throw std::runtime_error("Falha ao desconectar");
-
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        desconectar(client);
 
         threads.parar();
-        std::cout << "\n>> Sessão encerrada com sucesso.\n";
 
-        std::cout << "\n>> Tentando REVIVE após DISCONNECT...\n";
+        std::cout << "\n>> Parando as Threads.\n";
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "\n>> Ligando as Threads (Para testar Revive).\n";
 
-        // Aguarde um pouco simulando reconexão
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        threads.iniciar();
 
-        if (client.send_revive()) {
-            if (!client.receive_response()) {
-                std::cerr << ">> Falha ao receber resposta do REVIVE.\n";
-            } else {
-                std::cout << ">> Sessão revivida com sucesso!\n";
-            }
-        } else {
-            std::cerr << ">> Falha ao enviar pacote REVIVE.\n";
-        }
+        tentar_revive(client);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        loop_de_mensagens(threads);
+        desconectar(client);
+
+        threads.parar();
+        std::cout << "\n>> Desligando client.\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Erro: " << e.what() << "\n";

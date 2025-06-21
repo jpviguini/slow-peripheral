@@ -4,7 +4,6 @@
 SlowClient::SlowClient(const std::string& server_ip) 
 /* Inicializa socket UDP, configura timeout e valores iniciais de sessão */
 {
-
     srand(time(nullptr)); // Inicializa gerador de números aleatórios para eventual UUID
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0); // Cria socket UDP
@@ -20,19 +19,17 @@ SlowClient::SlowClient(const std::string& server_ip)
     server_addr.sin_port = htons(SERVER_PORT);
     inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr);
 
-    gerar_nil(session_id); // Inicia sessão com UUID nulo
+    gerar_nil(session_id);
     seqnum = 0;
     acknum = 0;
-    window_size = janela_envio.calcular_tamanho_disponivel(); // Tamanho da janela inicial
+    window_size = janela_envio.calcular_tamanho_disponivel();
 }
-
 
 SlowClient::~SlowClient() 
 /* Fecha o socket ao destruir o cliente */
 {
-    close(sockfd); // Fecha o socket ao destruir o cliente
+    close(sockfd);
 }
-
 
 bool SlowClient::send_connect() 
 /* Envia pacote de conexão com UUID nulo e registra na janela de envio */
@@ -40,9 +37,9 @@ bool SlowClient::send_connect()
     SlowPacket pkt{};
     gerar_nil(session_id);
     std::memset(&pkt, 0, sizeof(pkt));
-    std::memcpy(pkt.sid, session_id, UUID_SIZE); // Envia UUID nulo
+    std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
-    pkt.sttl_flags = encode_sttl_flags(0, FLAG_CONNECT); // Sinaliza tentativa de conexão
+    pkt.sttl_flags = encode_sttl_flags(0, FLAG_CONNECT);
     pkt.seqnum = 0;
     pkt.acknum = 0;
     pkt.window = window_size;
@@ -69,25 +66,20 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
         return false;
     }
 
-    if (!flag_print) {
-        // Converte para exibição e lógica
-        SlowPacket printable = packet_out;
-
-        printable.seqnum = ntohl(packet_out.seqnum);
-        printable.acknum = ntohl(packet_out.acknum);
-        print_packet_info(printable, received_bytes, 1);
-    } else {
-        print_packet_info(packet_out, received_bytes, 1);
-    }
-
     // Atualiza estado do cliente
     session_ttl = (packet_out.sttl_flags >> 5) & 0x07FFFFFF;
 
-    acknum = packet_out.acknum;
+    acknum = ntohl(packet_out.acknum);
     window_size = packet_out.window;
 
+    print_packet_info(packet_out, received_bytes, 1);
+
+    if ((packet_out.sttl_flags & FLAG_ACCEPT) && (packet_out.sttl_flags & FLAG_ACK)) {
+        std::cerr << ">> Revive aceito servidor.\n";
+    }
+
     // Confirma recebimento do pacote correspondente ao ACK
-    uint32_t ack_confirmado = ntohl(packet_out.acknum);
+    uint32_t ack_confirmado = packet_out.acknum;
     janela_envio.confirmar_recebimento(ack_confirmado);
 
     return true;
@@ -102,31 +94,6 @@ bool SlowClient::receive_setup()
         return false;
 
     // Inicializa nova sessão a partir da resposta
-    std::memcpy(session_id, response.sid, UUID_SIZE);
-    seqnum = response.seqnum;
-    acknum = response.seqnum;
-
-    janela_envio.confirmar_recebimento(acknum);
-
-    return true;
-}
-
-bool SlowClient::receive_revive() 
-/* Aguarda resposta de revive e restaura sessão se aceita */
-{
-    SlowPacket response{};
-    ssize_t received;    // problema no received. tem que mandar o anterior?
- 
-    if (!process_received_packet(response, received, 1))
-        return false;
-
-    // Testa se o servidor devolve a flag de aceite
-    if (!(response.sttl_flags & FLAG_ACCEPT)) {
-        std::cerr << ">> Revive rejeitado pelo servidor\n";
-        return false;  // servidor rejeitou o revive
-    }
-
-    // Restaura os dados da sessão
     std::memcpy(session_id, response.sid, UUID_SIZE);
     seqnum = response.seqnum;
     acknum = response.seqnum;
@@ -164,17 +131,12 @@ bool SlowClient::send_data(const uint8_t* data, size_t length)
 
     // Conversão para rede
     SlowPacket pkt_net = pkt;
-    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
-    pkt_net.seqnum = htonl(pkt.seqnum);
     pkt_net.acknum = htonl(pkt.acknum);
-    pkt_net.window = htons(pkt.window);
 
     janela_envio.registrar_envio(pkt.seqnum, pkt);
 
     ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE + length, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
-
-    std::cout << "TTL (27 bits): " << std::bitset<32>(pkt.sttl_flags) << std::endl;
     
     print_packet_info(pkt, SLOW_HEADER_SIZE + length, 0);
 
@@ -197,7 +159,6 @@ void SlowClient::salvar_sessao_em_arquivo() const
 
     arquivo.write(reinterpret_cast<const char*>(&session_ttl), sizeof(uint32_t));
 }
-
 
 bool SlowClient::carregar_sessao_do_arquivo() 
 /* Carrega sessão de arquivo e ajusta tempo de início */
@@ -258,17 +219,14 @@ bool SlowClient::send_revive()
     SlowPacket pkt{};
     std::memcpy(pkt.sid, session_id, UUID_SIZE);
 
-    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK | FLAG_REVIVE);  // Revive ligado
+    pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK |FLAG_REVIVE);  // Revive ligado
     pkt.seqnum = ++seqnum;
-    pkt.acknum = seqnum - 1;
+    pkt.acknum = acknum;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
     // Conversão para formato de rede
     SlowPacket pkt_net = pkt;
-    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
-    pkt_net.seqnum = htonl(pkt.seqnum);
     pkt_net.acknum = htonl(pkt.acknum);
-    pkt_net.window = htons(pkt.window);
 
     // janela_envio.registrar_envio(pkt.seqnum, pkt);
 
@@ -291,15 +249,15 @@ bool SlowClient::send_ack()
     pkt.seqnum = seqnum;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
-    janela_envio.registrar_envio(pkt.seqnum, pkt);
+    SlowPacket pkt_net = pkt;
+    pkt_net.acknum = pkt.acknum;
 
-    ssize_t sent = sendto(sockfd, &pkt, SLOW_HEADER_SIZE, 0,
+    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
     
     print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
     return sent >= (ssize_t)(SLOW_HEADER_SIZE);
 }
-
 
 bool SlowClient::send_disconnect() 
 /* Envia pacote de desconexão e registra na janela */
@@ -310,16 +268,13 @@ bool SlowClient::send_disconnect()
     // Envia pacote com flags de desconexão
     pkt.sttl_flags = encode_sttl_flags(session_ttl, FLAG_ACK | FLAG_CONNECT | FLAG_REVIVE);
     pkt.seqnum = ++seqnum;
-    pkt.acknum = 0;
+    pkt.acknum = acknum;
     pkt.window = 0;
 
     SlowPacket pkt_net = pkt;
-    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
-    pkt_net.seqnum = htonl(pkt.seqnum);
     pkt_net.acknum = htonl(pkt.acknum);
-    pkt_net.window = htons(pkt.window);
 
-    janela_envio.registrar_envio(pkt.seqnum, pkt);
+    janela_envio.registrar_envio(0, pkt_net);
 
     ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
@@ -364,10 +319,7 @@ bool SlowClient::send_fragmented_data(const uint8_t* data, size_t length)
         std::memcpy(pkt.data, data + offset, chunk_size);
 
         SlowPacket pkt_net = pkt;
-        pkt_net.sttl_flags = htonl(pkt.sttl_flags);
-        pkt_net.seqnum = htonl(pkt.seqnum);
         pkt_net.acknum = htonl(pkt.acknum);
-        pkt_net.window = htons(pkt.window);
 
         ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE + chunk_size, 0,
                               (sockaddr*)&server_addr, sizeof(server_addr));
@@ -395,11 +347,15 @@ bool SlowClient::janela_tem_pacotes_pendentes() const
 bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado) 
 /* Reenvia pacote expirado e imprime informações */
 {
+    if (reenviado >= 3) {
+        std::cerr << ">> Desistindo do pacote " << pkt.seqnum << " após 3 tentativas\n";
+        janela_envio.remover_pacote(pkt.seqnum);
+        // janela_envio.imprimir_pacotes_pendentes();
+        return false;
+    }
+
     SlowPacket pkt_net = pkt;
-    pkt_net.sttl_flags = htonl(pkt.sttl_flags);
-    pkt_net.seqnum = htonl(pkt.seqnum);
     pkt_net.acknum = htonl(pkt.acknum);
-    pkt_net.window = htons(pkt.window);
 
     size_t data_length = strlen(reinterpret_cast<const char*>(pkt_net.data));
 

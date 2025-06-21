@@ -73,7 +73,6 @@ void SlowThreadManager::thread_envio() {
     }
 }
 
-
 void SlowThreadManager::thread_recebimento() {
 /* Loop de recebimento: processa pacotes recebidos e exibe debug */
     while (executando) {
