@@ -51,7 +51,11 @@ int main() {
         SlowThreadManager threads(client);
         threads.iniciar();
 
-        client.send_ack();
+        // Tirei esse ack, uma vez que já evio o data com um ACK, ou seja, 
+        // ele já realiza a função de ACK + Dados (e po ter fragment também).
+        // client.send_ack();
+
+        std::cout << ">> SETUP realizado com sucesso!.\n";
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
 

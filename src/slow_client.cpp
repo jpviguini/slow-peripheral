@@ -69,7 +69,7 @@ bool SlowClient::process_received_packet(SlowPacket& packet_out, ssize_t& receiv
     // Atualiza estado do cliente
     session_ttl = (packet_out.sttl_flags >> 5) & 0x07FFFFFF;
 
-    acknum = ntohl(packet_out.acknum);
+    acknum = packet_out.acknum;
     window_size = packet_out.window;
 
     print_packet_info(packet_out, received_bytes, 1);
@@ -224,13 +224,9 @@ bool SlowClient::send_revive()
     pkt.acknum = acknum;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
-    // Conversão para formato de rede
-    SlowPacket pkt_net = pkt;
-    pkt_net.acknum = htonl(pkt.acknum);
-
     // janela_envio.registrar_envio(pkt.seqnum, pkt);
 
-    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+    ssize_t sent = sendto(sockfd, &pkt, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
     print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
@@ -249,10 +245,7 @@ bool SlowClient::send_ack()
     pkt.seqnum = seqnum;
     pkt.window = janela_envio.calcular_tamanho_disponivel();
 
-    SlowPacket pkt_net = pkt;
-    pkt_net.acknum = pkt.acknum;
-
-    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+    ssize_t sent = sendto(sockfd, &pkt, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
     
     print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
@@ -271,12 +264,9 @@ bool SlowClient::send_disconnect()
     pkt.acknum = acknum;
     pkt.window = 0;
 
-    SlowPacket pkt_net = pkt;
-    pkt_net.acknum = htonl(pkt.acknum);
+    janela_envio.registrar_envio(0, pkt);
 
-    janela_envio.registrar_envio(0, pkt_net);
-
-    ssize_t sent = sendto(sockfd, &pkt_net, SLOW_HEADER_SIZE, 0,
+    ssize_t sent = sendto(sockfd, &pkt, SLOW_HEADER_SIZE, 0,
                           (sockaddr*)&server_addr, sizeof(server_addr));
 
     print_packet_info(pkt, SLOW_HEADER_SIZE, 0);
@@ -350,7 +340,6 @@ bool SlowClient::reenviar_pacote(const SlowPacket& pkt, int reenviado)
     if (reenviado >= 3) {
         std::cerr << ">> Desistindo do pacote " << pkt.seqnum << " após 3 tentativas\n";
         janela_envio.remover_pacote(pkt.seqnum);
-        // janela_envio.imprimir_pacotes_pendentes();
         return false;
     }
 
