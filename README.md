@@ -2,10 +2,10 @@
 <p align="center">Trabalho prático para a disciplina SSC0142 - Redes de Computadores</p>
 
 <p align="center">
-  <a href="#estrutura-do-projeto">📁 Estrutura do Projeto</a> • 
-  <a href="#instalacao">⚙️ Instalação e Uso</a> • 
-  <a href="#objetivo">🎯 Objetivo</a> •
-  <a href="#funcionamento">🧩 Funcionamento </a> • 
+  <a href="#estrutura-do-projeto"> Estrutura do Projeto</a> • 
+  <a href="#instalacao"> Instalação e Uso</a> • 
+  <a href="#objetivo"> Objetivo</a> •
+  <a href="#funcionamento"> Funcionamento </a> • 
   <a href="#licença">Licença</a> •
   <a href="#agradecimentos">Agradecimentos</a> •
   <a href="#equipe">👥 Equipe</a>
@@ -13,7 +13,7 @@
 
 ---
 
-## <div id="estrutura-do-projeto"></div>📁 Estrutura do Projeto
+## <div id="estrutura-do-projeto"></div> Estrutura do Projeto
 
 ```bash
 slow-peripheral/
@@ -22,7 +22,6 @@ slow-peripheral/
 ├── src/
 │   ├── main.cpp               # Entrada principal da aplicação
 │   └── slow_client.cpp        # Implementação da lógica do cliente SLOW
-│   └── utils.cpp              # Funções auxiliares
 ├── Makefile                   # Script de build
 └── README.md                  # Este arquivo
 ```
@@ -30,7 +29,7 @@ slow-peripheral/
 
 ## <div id="instalacao"></div>⚙️ Instalação e Uso
 
-### 🔧 Compilação
+### Compilação
 
 1. Clone o repositório:
 ```bash
@@ -49,16 +48,16 @@ make
 ```
 
 
-## <div id="objetivo"></div>🎯 Objetivo
+## <div id="objetivo"></div> Objetivo
 Este projeto implementa um cliente peripheral que se comunica com um servidor central por meio do protocolo SLOW, construído sobre UDP. Ele foi desenvolvido como parte da disciplina SSC0142 – Redes de Computadores.
 
-## <div id="funcionamento"></div>🧩 Funcionamento
+## <div id="funcionamento"></div> Funcionamento
 
 O cliente `slow_client` implementa o comportamento de um **peripheral** no protocolo de transporte **SLOW**, um protocolo confiável baseado em **UDP**, utilizando a porta **7033**. O protocolo simula características de protocolos como TCP, porém com controle manual de conexão, fluxo e fragmentação.
 
 ---
 
-### 🔗 1. Estabelecimento de Conexão (3-Way Handshake)
+### 1. Estabelecimento de Conexão (3-Way Handshake)
 
 - O peripheral inicia a conexão com o envio de um pacote com:
   - **UUID nulo** (sid = 0)
@@ -71,7 +70,7 @@ O cliente `slow_client` implementa o comportamento de um **peripheral** no proto
 
 ---
 
-### 📤 2. Envio de Dados
+### 2. Envio de Dados
 
 Após o handshake, o peripheral pode enviar dados para o central:
 
@@ -86,11 +85,11 @@ Após o handshake, o peripheral pode enviar dados para o central:
     - A flag `MB` (More Bits) indica se ainda há fragmentos a serem enviados
 - O campo `window`, recebido do central, representa o tamanho da **janela de recepção disponível** (controle de fluxo)
   - O peripheral **deve respeitar** essa janela e só enviar pacotes se houver espaço
-
+- Se não receber um `ACK` dentro do tempo limite, o pacote é **reenviado**
 
 ---
 
-### 🔁 3. Reconexão Rápida (0-Way Connect)
+### 3. Reconexão Rápida (0-Way Connect)
 
 - Se o tempo de vida da sessão (`sttl`) ainda não expirou, é possível reconectar usando a flag `Revive`
 - O pacote de dados é enviado com a flag `Revive` ligada
@@ -98,7 +97,7 @@ Após o handshake, o peripheral pode enviar dados para o central:
 
 ---
 
-### 🔌 4. Desconexão
+### 4. Desconexão
 
 - A desconexão é realizada com o envio de um pacote com as flags:
   - `Connect = 1`, `Revive = 1`, `ACK = 1`
@@ -108,35 +107,7 @@ Após o handshake, o peripheral pode enviar dados para o central:
 
 ---
 
-### 🧵 5. Threads de Comunicação
-
-* O peripheral utiliza **duas threads paralelas** para melhorar a comunicação:
-
-  * Uma **thread de envio**, que retira mensagens da fila e as envia via UDP
-  * Uma **thread de recebimento**, que escuta constantemente por respostas do central
-* A comunicação entre as threads e o programa principal é feita com:
-
-  * Fila protegida por `mutex`
-  * `condition_variable` para acordar a thread de envio quando há mensagens
-* Essa estrutura evita bloqueios e permite a **transmissão contínua e responsiva**
-
----
-
-### 📶 6. Controle de Fluxo com Janela Deslizante
-
-* O peripheral implementa uma **janela de envio** para gerenciar os pacotes pendentes:
-
-  * Cada pacote enviado é registrado com seu `seqnum`
-  * A janela só avança quando os ACKs correspondentes são recebidos
-* O campo `window`, enviado pelo central, limita o número de pacotes pendentes
-* Caso a janela esteja cheia:
-
-  * Novos pacotes não são enviados até que ACKs liberem espaço
-* Esse controle evita sobrecarga e **garante confiabilidade na transmissão**
-
----
-
-### 🛠️ Estrutura do Pacote (slow_packet_t)
+### Estrutura do Pacote (slow_packet_t)
 
 Todos os pacotes seguem a estrutura abaixo, em formato **little endian**:
 
@@ -154,7 +125,7 @@ Todos os pacotes seguem a estrutura abaixo, em formato **little endian**:
 
 ---
 
-### 🔄 Resumo da Lógica de Fluxo
+### Resumo da Lógica de Fluxo
 
 ```text
 [1] Connect -------------------> central
@@ -164,8 +135,17 @@ Todos os pacotes seguem a estrutura abaixo, em formato **little endian**:
 [3] Disconnect ----------------> central
                    <----------- Ack
 ```
+---
 
+### Servidor UDP em Python (Simulador Silencioso)
 
+Para testar o mecanismo de **reenvio automático de mensagens** após o timeout da janela de envio, foi desenvolvido um servidor UDP simples em Python. Esse servidor **recebe os pacotes do cliente**, mas **não envia nenhuma resposta** (ACK). Assim, ele permite verificar se o cliente está corretamente reenviando os pacotes que permanecem no buffer por tempo excessivo.
+
+Esse teste é fundamental para validar a robustez do protocolo de envio confiável (SLOW), garantindo que o cliente consiga detectar falhas na comunicação e tentar retransmissões automaticamente.
+
+> O servidor imprime apenas o primeiro pacote de conexão (`CONNECT`) recebido e, em seguida, conta silenciosamente quantas vezes cada pacote com o mesmo `SEQNUM` é reenviado.
+
+---
 
 ## <div id="licenca"></div>Licença
 Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para mais detalhes.
@@ -174,7 +154,7 @@ Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para ma
 Gostaríamos de agradecer ao monitor Gabriel Cruz, pela sua orientação e apoio ao longo deste projeto.
 
 ## <div id="equipe"></div>👥 Equipe
-- Gabriel de Andrade Abreu - **14571362** ([Github](https://github.com/OGabrielAbreuBr))
+- Gabriel de Andrade Abreu - **14571362** ([Github]) (https://github.com/OGabrielAbreuBr)
 - João Pedro Viguini T.T. Correa - **14675503** ([Github](https://github.com/MatheusPaivaa))
 - Matheus Paiva Angarola - **12560982** ([Github](https://github.com/MatheusPaivaa))
 

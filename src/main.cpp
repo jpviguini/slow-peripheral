@@ -1,48 +1,86 @@
 #include "slow_client.hpp"
+#include "slow_threads.hpp" // Gerenciador de threads
 #include <iostream>
-#include <cstring>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
+
+void loop_de_mensagens(SlowThreadManager& threads) {
+    std::string entrada;
+    while (true) {
+        std::cout << "\n> Digite sua mensagem (ou 'sair'): ";
+        std::getline(std::cin, entrada);
+        if (entrada == "sair") break;
+
+        std::vector<uint8_t> dados(entrada.begin(), entrada.end());
+        threads.enfileirar_mensagem(dados);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+}
+
+void desconectar(SlowClient& client) {
+    std::cout << "\n>> Enviando DISCONNECT...\n";
+    if (!client.send_disconnect())
+        throw std::runtime_error("Falha ao desconectar");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    while (client.janela_tem_pacotes_pendentes()) {
+        // Esperando pacotes pendentes esvaziarem
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+void tentar_revive(SlowClient& client) {
+    std::cout << "\n>> Tentando REVIVE após DISCONNECT...\n";
+    if (client.send_revive()) {
+        std::cerr << ">> Sucesso ao enviar pacote REVIVE.\n";
+    } else {
+        std::cerr << ">> Falha ao enviar pacote REVIVE.\n";
+    }
+}
 
 int main() {
     try {
-        // Inicializa cliente com IP do servidor
         SlowClient client("142.93.184.175");
 
-        std::cout << ">> Enviando pacote CONNECT...\n\n";
-        if (!client.send_connect())
-            throw std::runtime_error("Falha ao enviar CONNECT");
+        std::cout << ">> Conectando com CONNECT...\n";
+        if (!client.send_connect()) throw std::runtime_error("CONNECT falhou");
+        if (!client.receive_setup()) throw std::runtime_error("SETUP não recebido");
 
-        std::cout << ">> Aguardando resposta do servidor...\n";
-        if (!client.receive_setup())
-            throw std::runtime_error("Sem resposta do servidor");
+        SlowThreadManager threads(client);
+        threads.iniciar();
 
-        // Dados para envio
-        std::cout << ">> Enviando dados de teste...\n";
+        // Tirei esse ack, uma vez que já evio o data com um ACK, ou seja, 
+        // ele já realiza a função de ACK + Dados (e po ter fragment também).
+        // client.send_ack();
 
-        const char* msg = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        if (!client.send_data(reinterpret_cast<const uint8_t*>(msg), strlen(msg)))
-            throw std::runtime_error("Falha ao enviar dados");
+        std::cout << ">> SETUP realizado com sucesso!.\n";
 
-        // Recebe ACK da mensagem de dados
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta para os dados enviados.\n";
+        std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta para os dados enviados.\n";
+        loop_de_mensagens(threads);
+        client.debug_print_pacotes_pendentes();
 
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta para os dados enviados.\n";
+        desconectar(client);
 
-        // Envia sinal de encerramento
-        std::cout << ">> Enviando DISCONNECT...\n";
-        if (!client.send_disconnect())
-            throw std::runtime_error("Falha ao desconectar");
+        threads.parar();
 
-        // Recebe ACK da desconexão
-        if (!client.receive_response())
-            std::cerr << ">> Aviso: não houve resposta ao disconnect.\n";
+        std::cout << "\n>> Parando as Threads.\n";
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "\n>> Ligando as Threads (Para testar Revive).\n";
 
-        std::cout << ">> Sessão encerrada com sucesso.\n";
+        threads.iniciar();
+
+        tentar_revive(client);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        loop_de_mensagens(threads);
+        desconectar(client);
+
+        threads.parar();
+        std::cout << "\n>> Desligando client.\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Erro: " << e.what() << "\n";
