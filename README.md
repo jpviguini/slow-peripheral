@@ -154,7 +154,7 @@ Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para ma
 Gostaríamos de agradecer ao monitor Gabriel Cruz, pela sua orientação e apoio ao longo deste projeto.
 
 ## <div id="equipe"></div>👥 Equipe
-- Gabriel de Andrade Abreu - **14571362** ([Github]) (https://github.com/OGabrielAbreuBr)
+- Gabriel de Andrade Abreu - **14571362** ([Github](https://github.com/OGabrielAbreuBr))
 - João Pedro Viguini T.T. Correa - **14675503** ([Github](https://github.com/MatheusPaivaa))
 - Matheus Paiva Angarola - **12560982** ([Github](https://github.com/MatheusPaivaa))
 
